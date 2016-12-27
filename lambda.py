@@ -2,6 +2,7 @@ import boto3
 from datetime import datetime
 import time
 import os
+import json
 
 def main(event, context):
 	# Create / Get instance
@@ -10,12 +11,11 @@ def main(event, context):
 	if instance:
 		state = instance.state['Name']
 	if not instance or state not in ['pending','running']:
-		state = "pending"
 		instance = create_instance()
 	return {
 		"statusCode": 200,
 		"headers": { },
-		"body": state
+		"body": json.dumps({'message':'Success'})
 	}
 
 def create_instance():
@@ -47,10 +47,17 @@ def create_instance():
 	while state != "running":
 		time.sleep(0.5)
 		state = get_instance_by_id(instance.instance_id).state['Name']
+	# Attach EIP
 	client.associate_address(
 		InstanceId = instance.instance_id,
 		AllocationId = os.getenv('eip_allocation_id'),
 		AllowReassociation = False
+	)
+	# Attache EBS
+	client.attach_volume(
+		VolumeId = os.getenv('volume_id'),
+		InstanceId = instance.instance_id,
+		Device = '/dev/sdb'
 	)
 	return instance
 
