@@ -1,6 +1,7 @@
 import boto3
 from datetime import datetime
 import time
+import os
 
 def main(event, context):
 	# Create / Get instance
@@ -10,28 +11,31 @@ def main(event, context):
 		state = instance.state['Name']
 	if not instance or state not in ['pending','running']:
 		state = "pending"
-		instance = create_instance(event)
+		instance = create_instance()
 	return {
 		"statusCode": 200,
 		"headers": { },
 		"body": state
 	}
 
-def create_instance(event):
+def create_instance():
+	file = open('userdata.sh', 'r')
+	userdata = file.read()
 	client = boto3.client('ec2',
-		region_name = event['region'],
-		aws_access_key_id = event['aws_access_key_id'],
-		aws_secret_access_key = event['aws_secret_access_key'],
+		region_name = os.getenv('region'),
+		aws_access_key_id = os.getenv('aws_access_key_id'),
+		aws_secret_access_key = os.getenv('aws_secret_access_key'),
 		)
 	reservation = client.run_instances(
 		ImageId = 'ami-b953f2da',
-		KeyName = event['key_name'],
-		InstanceType = event['instance_type'],
-		SecurityGroupIds = event['security_groups'].split(' '),
-		SubnetId = event['subnet_id'],
+		KeyName = os.getenv('key_name'),
+		InstanceType = os.getenv('instance_type'),
+		SecurityGroupIds = os.getenv('security_groups').split(' '),
+		SubnetId = os.getenv('subnet_id'),
 		InstanceInitiatedShutdownBehavior = "terminate",
 		MinCount = 1,
-		MaxCount = 1)
+		MaxCount = 1,
+		UserData = userdata)
 	# Convert object into correct type
 	instance = get_instance_by_id(reservation['Instances'][0]['InstanceId'])
 	tag_instance(instance, {
@@ -45,7 +49,7 @@ def create_instance(event):
 		state = get_instance_by_id(instance.instance_id).state['Name']
 	client.associate_address(
 		InstanceId = instance.instance_id,
-		AllocationId = event['eip_allocation_id'],
+		AllocationId = os.getenv('eip_allocation_id'),
 		AllowReassociation = False
 	)
 	return instance
